@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Algorithme de Dantzig - Étape par Étape</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.js"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.css" rel="stylesheet" />
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; text-align: center; }
+    label, input, button { font-size: 1rem; margin: 5px; }
+    input { padding: 6px; border-radius: 4px; border: 1px solid #ccc; width: 150px; text-align: center; }
+    button { background-color: #007BFF; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; }
+    button:hover { background-color: #0056b3; }
+    #graph { height: 600px; border: 1px solid #ccc; margin-top: 20px; }
+    #logs { max-height: 300px; overflow-y: auto; border: 1px solid #aaa; padding: 10px; margin-top: 20px; text-align: left; }
+    .highlight { background-color: #f1f1f1; padding: 5px; margin: 5px 0; border-radius: 4px; }
+    .minstep { background-color: #ffebee; font-weight: bold; }
+    .edge-input { margin: 10px 0; }
+    #edgeDisplay { font-family: monospace; margin-top: 5px; white-space: pre-line; }
+  </style>
+</head>
+<body>
+
+<h2>Algorithme de Dantzig – Pas à pas</h2>
+
+<div>
+  <label>Noeuds (séparés par des virgules) : 
+    <input type="text" id="nodes" value="A,B,C,D,E,F,G" />
+  </label><br>
+
+  <div class="edge-input">
+    <input placeholder="De" id="from" />
+    <input placeholder="À" id="to" />
+    <input placeholder="Poids" type="number" id="weight" />
+    <button onclick="addEdge()">Ajouter l’arête</button>
+  </div>
+  <div id="edgeDisplay"></div>
+
+  <label>Départ : <input type="text" id="start" value="A" /></label>
+  <label>Arrivée : <input type="text" id="end" value="G" /></label><br><br>
+
+  <button onclick="initDantzig()">Initialiser</button>
+  <button onclick="nextStep()">Suivant</button>
+</div>
+
+<div id="logs"></div>
+<div id="graph"></div>
+
+<script>
+let nodes = [], edges = [], graph = {}, dist = {}, prev = {}, marked = new Set(), steps = [], k = 0, endNode = "", startNode = "";
+let network, edgeData = [], backtrackIndex = 0, finished = false;
+
+function addEdge() {
+  const from = document.getElementById("from").value.trim();
+  const to = document.getElementById("to").value.trim();
+  const weight = parseFloat(document.getElementById("weight").value);
+  if (from && to && !isNaN(weight)) {
+    edgeData.push({ from, to, weight });
+    document.getElementById("edgeDisplay").innerHTML = edgeData.map(e => `${e.from} → ${e.to} : ${e.weight}`).join('\n');
+    document.getElementById("from").value = "";
+    document.getElementById("to").value = "";
+    document.getElementById("weight").value = "";
+  }
+}
+
+function initDantzig() {
+  document.getElementById('logs').innerHTML = '';
+  k = 0; backtrackIndex = 0; finished = false;
+  marked.clear(); steps = [];
+  prev = {}; dist = {};
+
+  let rawNodes = document.getElementById('nodes').value.split(',').map(x => x.trim());
+  startNode = document.getElementById('start').value.trim();
+  endNode = document.getElementById('end').value.trim();
+  nodes = [...new Set(rawNodes)];
+  graph = {};
+
+  for (let node of nodes) {
+    graph[node] = {};
+    dist[node] = Infinity;
+  }
+
+  for (let edge of edgeData) {
+    graph[edge.from][edge.to] = edge.weight;
+  }
+
+  dist[startNode] = 0;
+  marked.add(startNode);
+
+  updateLog(`Initialisation: départ ${startNode}, arrivée ${endNode}`);
+  drawGraph();
+}
+
+function nextStep() {
+  if (finished) {
+    backtrackPath();
+    return;
+  }
+
+  if (marked.has(endNode)) {
+    updateLog("Algorithme terminé. Début du chemin optimal.");
+    finished = true;
+    drawGraph(true);
+    return;
+  }
+
+  let candidates = [];
+  for (let m of marked) {
+    for (let n in graph[m]) {
+      if (!marked.has(n)) {
+        let val = dist[m] + graph[m][n];
+        candidates.push({ from: m, to: n, value: val });
+      }
+    }
+  }
+
+  if (candidates.length === 0) {
+    updateLog("Aucun chemin restant.");
+    finished = true;
+    return;
+  }
+
+  candidates.sort((a, b) => a.value - b.value);
+  const min = candidates[0];
+
+  dist[min.to] = min.value;
+  prev[min.to] = min.from;
+  marked.add(min.to);
+  steps.push(min);
+  k++;
+
+  let log = `<strong>Étape k=${k}</strong><br>`;
+  for (let c of candidates) {
+    const isMin = c.from === min.from && c.to === min.to;
+    log += `<div class="${isMin ? 'minstep' : ''}">
+      I${c.to} = I${c.from} + v(${c.from}, ${c.to}) = ${dist[c.from]} + ${graph[c.from][c.to]} = ${c.value}
+    </div>`;
+  }
+
+  updateLog(log);
+  drawGraph();
+}
+
+function updateLog(html) {
+  const div = document.createElement("div");
+  div.className = "highlight";
+  div.innerHTML = html;
+  document.getElementById('logs').appendChild(div);
+  div.scrollIntoView({ behavior: "smooth" });
+}
+
+function drawGraph(showFinal = false) {
+  const nodesVis = nodes.map(n => ({
+    id: n,
+    label: n,
+    color: marked.has(n) ? (showFinal && n === endNode ? "#4caf50" : "#03a9f4") : "#ccc",
+    shape: 'circle',
+    font: { size: 20 }
+  }));
+
+  const nodeTitles = nodes.map(n => ({
+    id: `label_${n}`,
+    label: `I${n} = ${dist[n] !== Infinity ? dist[n] : "∞"}`,
+    shape: 'text',
+    color: '#000',
+    font: { size: 14 },
+    x: 0, y: 0
+  }));
+
+  const positions = network ? network.getPositions(nodes) : {};
+
+  nodeTitles.forEach(labelNode => {
+    const originalId = labelNode.id.replace('label_', '');
+    if (positions[originalId]) {
+      labelNode.x = positions[originalId].x;
+      labelNode.y = positions[originalId].y + 40;
+    }
+  });
+
+  const edgesVis = edgeData.map(e => {
+    const isStep = steps.find(s => s.from === e.from && s.to === e.to);
+    return {
+      from: e.from,
+      to: e.to,
+      label: `${e.weight}`,
+      arrows: 'to',
+      color: isStep ? 'red' : '#bbb'
+    };
+  });
+
+  const container = document.getElementById("graph");
+  const data = {
+    nodes: new vis.DataSet([...nodesVis, ...nodeTitles]),
+    edges: new vis.DataSet(edgesVis)
+  };
+  const options = {
+    edges: { font: { align: 'top' } },
+    layout: { improvedLayout: true },
+    physics: false
+  };
+
+  network = new vis.Network(container, data, options);
+}
+
+function backtrackPath() {
+  let path = [];
+  let current = endNode;
+  while (current && current !== startNode) {
+    let p = prev[current];
+    if (!p) break;
+    path.unshift({ from: p, to: current });
+    current = p;
+  }
+
+  if (backtrackIndex < path.length) {
+    const step = path[backtrackIndex++];
+    steps.push(step);
+    drawGraph(true);
+    updateLog(`Chemin optimal: ${step.from} → ${step.to}`);
+  } else {
+    updateLog(`<strong>Chemin optimal complet reconstruit.</strong>`);
+  }
+}
+</script>
+
+</body>
+</html>
