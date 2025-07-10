@@ -85,6 +85,22 @@ button:hover {
   <button onclick="nextStep()">Suivant</button>
 </div>
 
+<div>
+  <label>Input Format Json :</label><br>
+  <textarea id="graphJsonInput" rows="5" cols="50">
+{
+  "nodes": ["A", "B", "C", "D"],
+  "edges": [
+    { "from": "A", "to": "B", "weight": 1 },
+    { "from": "B", "to": "C", "weight": 1 },
+    { "from": "A", "to": "C", "weight": 2 },
+    { "from": "C", "to": "D", "weight": 2 }
+  ]
+}
+  </textarea><br>
+  <button onclick="parseGraphJson()">Initialiser le graphe</button>
+</div>
+
 <div id="logs"></div>
 <div id="graph"></div>
 
@@ -311,6 +327,26 @@ function highlightOptimalPath() {
   };
 
   network = new vis.Network(container, data, options);
+}
+
+// Nouvelle fonction pour parser le JSON du graphe
+function parseGraphJson() {
+  try {
+    const input = document.getElementById("graphJsonInput").value.trim();
+    const graphData = JSON.parse(input);
+
+    // Parse nodes and edges
+    nodes = graphData.nodes;
+    edgeData = graphData.edges;
+
+    // Display parsed edges
+    document.getElementById("edgeDisplay").innerHTML = edgeData.map(e => `${e.from} → ${e.to} : ${e.weight}`).join('\n');
+
+    // Initialize graph
+    initDantzig();
+  } catch (error) {
+    alert("Erreur dans le format JSON. Veuillez vérifier votre entrée.");
+  }
 }
 </script>
 
