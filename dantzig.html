@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Algorithme de Dantzig - Étape par Étape</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.js"></script>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.css" rel="stylesheet" />
@@ -9,14 +9,56 @@
     body { font-family: Arial, sans-serif; padding: 20px; text-align: center; }
     label, input, button { font-size: 1rem; margin: 5px; }
     input { padding: 6px; border-radius: 4px; border: 1px solid #ccc; width: 150px; text-align: center; }
-    button { background-color: #007BFF; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; }
-    button:hover { background-color: #0056b3; }
+    button {
+  background-color: #007BFF;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+}
+button:hover {
+  background-color: #0056b3;
+  transform: scale(1.05); /* Légère mise en avant */
+}
     #graph { height: 600px; border: 1px solid #ccc; margin-top: 20px; }
-    #logs { max-height: 300px; overflow-y: auto; border: 1px solid #aaa; padding: 10px; margin-top: 20px; text-align: left; }
-    .highlight { background-color: #f1f1f1; padding: 5px; margin: 5px 0; border-radius: 4px; }
-    .minstep { background-color: #ffebee; font-weight: bold; }
+    #logs {
+      max-height: 300px;
+      overflow-y: auto;
+      border: 1px solid #aaa;
+      padding: 10px;
+      margin-top: 20px;
+      text-align: left;
+      background-color: #f9f9f9; /* Couleur de fond douce */
+      border-radius: 5px; /* Coins arrondis */
+    }
+    .highlight {
+      background-color: #e8f5e9; /* Vert clair */
+      padding: 5px;
+      margin: 5px 0;
+      border-radius: 4px;
+    }
+    .minstep {
+      background-color: #ffebee; /* Rouge clair */
+      font-weight: bold;
+      border-left: 4px solid #f44336; /* Bordure rouge */
+      padding-left: 10px;
+    }
     .edge-input { margin: 10px 0; }
     #edgeDisplay { font-family: monospace; margin-top: 5px; white-space: pre-line; }
+
+    @media (max-width: 768px) {
+      body {
+        padding: 10px;
+      }
+      #graph {
+        height: 400px; /* Réduire la hauteur du graphe */
+      }
+      input {
+        width: 100%; /* Champs en pleine largeur */
+      }
+    }
   </style>
 </head>
 <body>
@@ -24,20 +66,20 @@
 <h2>Algorithme de Dantzig – Pas à pas</h2>
 
 <div>
-  <label>Noeuds (séparés par des virgules) : 
-    <input type="text" id="nodes" value="A,B,C,D,E,F,G" />
+  <label>Noeuds (séparés par des virgules) :
+    <input type="text" id="nodes" value="A,B,C,D" />
   </label><br>
 
   <div class="edge-input">
-    <input placeholder="De" id="from" />
-    <input placeholder="À" id="to" />
-    <input placeholder="Poids" type="number" id="weight" />
+    <input placeholder="De (ex: A)" id="from" />
+    <input placeholder="À (ex: B)" id="to" />
+    <input placeholder="Poids (ex: 5)" type="number" id="weight" />
     <button onclick="addEdge()">Ajouter l’arête</button>
   </div>
   <div id="edgeDisplay"></div>
 
   <label>Départ : <input type="text" id="start" value="A" /></label>
-  <label>Arrivée : <input type="text" id="end" value="G" /></label><br><br>
+  <label>Arrivée : <input type="text" id="end" value="D" /></label><br><br>
 
   <button onclick="initDantzig()">Initialiser</button>
   <button onclick="nextStep()">Suivant</button>
@@ -46,9 +88,18 @@
 <div id="logs"></div>
 <div id="graph"></div>
 
+<div style="text-align: left; margin-top: 20px;">
+  <strong>Légende :</strong>
+  <ul style="list-style: none; padding: 0;">
+    <li><span style="display: inline-block; width: 20px; height: 20px; background-color: #03a9f4; border-radius: 50%;"></span> Nœuds visités</li>
+    <li><span style="display: inline-block; width: 20px; height: 20px; background-color: #4caf50; border-radius: 50%;"></span> Nœud final</li>
+    <li><span style="display: inline-block; width: 20px; height: 20px; background-color: red; border-radius: 50%;"></span> Nœuds du chemin optimal</li>
+  </ul>
+</div>
+
 <script>
 let nodes = [], edges = [], graph = {}, dist = {}, prev = {}, marked = new Set(), steps = [], k = 0, endNode = "", startNode = "";
-let network, edgeData = [], backtrackIndex = 0, finished = false;
+let network, edgeData = [], backtrackIndex = 0, finished = false, optimalPath = [];
 
 function addEdge() {
   const from = document.getElementById("from").value.trim();
@@ -60,12 +111,15 @@ function addEdge() {
     document.getElementById("from").value = "";
     document.getElementById("to").value = "";
     document.getElementById("weight").value = "";
+    alert("Arête ajoutée avec succès !");
+  } else {
+    alert("Veuillez remplir tous les champs correctement.");
   }
 }
 
 function initDantzig() {
   document.getElementById('logs').innerHTML = '';
-  k = 0; backtrackIndex = 0; finished = false;
+  k = 0; backtrackIndex = 0; finished = false; optimalPath = [];
   marked.clear(); steps = [];
   prev = {}; dist = {};
 
@@ -167,24 +221,14 @@ function drawGraph(showFinal = false) {
     x: 0, y: 0
   }));
 
-  const positions = network ? network.getPositions(nodes) : {};
-
-  nodeTitles.forEach(labelNode => {
-    const originalId = labelNode.id.replace('label_', '');
-    if (positions[originalId]) {
-      labelNode.x = positions[originalId].x;
-      labelNode.y = positions[originalId].y + 40;
-    }
-  });
-
   const edgesVis = edgeData.map(e => {
-    const isStep = steps.find(s => s.from === e.from && s.to === e.to);
+    const isOptimalEdge = optimalPath.some(optEdge => optEdge.from === e.from && optEdge.to === e.to);
     return {
       from: e.from,
       to: e.to,
       label: `${e.weight}`,
       arrows: 'to',
-      color: isStep ? 'red' : '#bbb'
+      color: isOptimalEdge ? 'red' : '#bbb'
     };
   });
 
@@ -193,10 +237,16 @@ function drawGraph(showFinal = false) {
     nodes: new vis.DataSet([...nodesVis, ...nodeTitles]),
     edges: new vis.DataSet(edgesVis)
   };
+
   const options = {
     edges: { font: { align: 'top' } },
-    layout: { improvedLayout: true },
-    physics: false
+    layout: {
+      hierarchical: {
+        direction: 'UD', // UD = Haut vers Bas, LR = Gauche vers Droite
+        sortMethod: 'directed' // Organiser selon les connexions
+      }
+    },
+    physics: false // Désactiver la physique pour éviter le désordre
   };
 
   network = new vis.Network(container, data, options);
@@ -212,14 +262,55 @@ function backtrackPath() {
     current = p;
   }
 
+  optimalPath = path;
+
   if (backtrackIndex < path.length) {
     const step = path[backtrackIndex++];
-    steps.push(step);
     drawGraph(true);
     updateLog(`Chemin optimal: ${step.from} → ${step.to}`);
   } else {
     updateLog(`<strong>Chemin optimal complet reconstruit.</strong>`);
+    highlightOptimalPath();
   }
+}
+
+function highlightOptimalPath() {
+  const optimalNodes = new Set();
+
+  // Collecter les nœuds du chemin optimal
+  optimalPath.forEach(edge => {
+    optimalNodes.add(edge.from);
+    optimalNodes.add(edge.to);
+  });
+
+  const nodesVis = nodes.map(n => ({
+    id: n,
+    label: n,
+    color: optimalNodes.has(n) ? "red" : "#ccc", // Coloration en rouge uniquement pour les nœuds du chemin optimal
+    shape: 'circle',
+    font: { size: 20 }
+  }));
+
+  const edgesVis = edgeData.map(e => ({
+    from: e.from,
+    to: e.to,
+    label: `${e.weight}`,
+    arrows: 'to',
+    color: '#bbb' // Garder les arêtes avec leur couleur par défaut
+  }));
+
+  const container = document.getElementById("graph");
+  const data = {
+    nodes: new vis.DataSet(nodesVis),
+    edges: new vis.DataSet(edgesVis)
+  };
+  const options = {
+    edges: { font: { align: 'top' } },
+    layout: { improvedLayout: true },
+    physics: false
+  };
+
+  network = new vis.Network(container, data, options);
 }
 </script>
 
